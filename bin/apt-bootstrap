@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# bootstrap -- Step-based server provisioning runner.
+# apt-bootstrap -- Step-based server provisioning runner.
 #
-# Usage: bootstrap <command> [options]
-#   See: bootstrap help
+# Usage: apt-bootstrap <command> [options]
+#   See: apt-bootstrap help
 
 set -euo pipefail
 
@@ -454,7 +454,7 @@ cmd_list() {
 
 cmd_create() {
     if [[ $# -lt 2 ]]; then
-        die "Usage: bootstrap create NNNN name"
+        die "Usage: apt-bootstrap create NNNN name"
     fi
 
     local number="$1"
@@ -482,7 +482,7 @@ cmd_create() {
 
     chmod +x "${dest}"
     ok "Created: ${dest}"
-    info "Edit the step file, then run: bootstrap run --step ${number}"
+    info "Edit the step file, then run: apt-bootstrap run --step ${number}"
 }
 
 # ---------------------------------------------------------------------------
@@ -491,7 +491,7 @@ cmd_create() {
 
 cmd_rename() {
     if [[ $# -lt 2 ]]; then
-        die "Usage: bootstrap rename NNNN new-name"
+        die "Usage: apt-bootstrap rename NNNN new-name"
     fi
 
     local number="$1"
@@ -564,7 +564,7 @@ cmd_rename() {
 
 cmd_move() {
     if [[ $# -lt 2 ]]; then
-        die "Usage: bootstrap move OLD_NNNN NEW_NNNN"
+        die "Usage: apt-bootstrap move OLD_NNNN NEW_NNNN"
     fi
 
     local old_number="$1"
@@ -628,7 +628,7 @@ cmd_move() {
 
 cmd_delete() {
     if [[ $# -lt 1 ]]; then
-        die "Usage: bootstrap delete NNNN [--force] [--purge]"
+        die "Usage: apt-bootstrap delete NNNN [--force] [--purge]"
     fi
 
     local number="$1"
@@ -701,7 +701,7 @@ cmd_delete() {
 
 cmd_run() {
     if [[ $# -eq 0 ]]; then
-        die "Usage: bootstrap run --all|--first|--last|--step NNNN|--range NNNN:NNNN|--changed|--failed [--force] [--list-only]"
+        die "Usage: apt-bootstrap run --all|--first|--last|--step NNNN|--range NNNN:NNNN|--changed|--failed [--force] [--list-only]"
     fi
 
     local selector=""
@@ -880,7 +880,7 @@ cmd_run() {
     fi
     if [[ ${#changed_steps[@]} -gt 0 ]]; then
         warn "${#changed_steps[@]} changed step(s) were skipped: ${changed_steps[*]}"
-        warn "Run 'bootstrap run --changed' or 'bootstrap run --force' to rerun them."
+        warn "Run 'apt-bootstrap run --changed' or 'apt-bootstrap run --force' to rerun them."
     fi
 }
 
@@ -936,7 +936,7 @@ print_state_summary() {
 
 cmd_state() {
     if [[ $# -eq 0 ]]; then
-        die "Usage: bootstrap state show [NNNN] | clear NNNN | clear-range NNNN NNNN | clear-all"
+        die "Usage: apt-bootstrap state show [NNNN] | clear NNNN | clear-range NNNN NNNN | clear-all"
     fi
 
     local subcommand="$1"
@@ -986,7 +986,7 @@ cmd_state() {
             ;;
 
         clear)
-            [[ $# -ge 1 ]] || die "Usage: bootstrap state clear NNNN"
+            [[ $# -ge 1 ]] || die "Usage: apt-bootstrap state clear NNNN"
             local number="$1"
             validate_number "${number}"
             ensure_dirs
@@ -1004,7 +1004,7 @@ cmd_state() {
             ;;
 
         clear-range)
-            [[ $# -ge 2 ]] || die "Usage: bootstrap state clear-range NNNN NNNN"
+            [[ $# -ge 2 ]] || die "Usage: apt-bootstrap state clear-range NNNN NNNN"
             local lo="$1" hi="$2"
             validate_number "${lo}"
             validate_number "${hi}"
@@ -1125,10 +1125,10 @@ cmd_doctor() {
 cmd_help() {
     cat <<'EOF'
 
-bootstrap -- Step-based server provisioning runner
+apt-bootstrap -- Step-based server provisioning runner
 
 USAGE
-  bootstrap <command> [options]
+  apt-bootstrap <command> [options]
 
 COMMANDS
 
@@ -1212,7 +1212,7 @@ main() {
         help|--help|-h) cmd_help ;;
         *)
             printf 'error: Unknown command: %s\n' "${command}" >&2
-            printf 'Run: bootstrap help\n' >&2
+            printf 'Run: apt-bootstrap help\n' >&2
             exit 1
             ;;
     esac

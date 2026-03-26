@@ -1,4 +1,4 @@
-# bootstrap
+# apt-bootstrap
 
 A local-first, filesystem-based step runner for server provisioning and hardening.
 
@@ -9,17 +9,17 @@ Steps are numbered shell scripts. The runner executes them in order, tracks stat
 ## Layout
 
 ```
-bootstrap/
+apt-bootstrap/
   bin/
-    bootstrap         # Main executable
+    apt-bootstrap         # Main executable
   steps/              # Step scripts (NNNN-name.sh)
   state/              # Per-step state files (NNNN-name.state)
   logs/               # Per-run log files (NNNN-name.YYYYMMDD-HHMMSS.log)
   templates/
-    step.sh           # Template used by `bootstrap create`
+    step.sh           # Template used by `apt-bootstrap create`
 ```
 
-The `bin/bootstrap` script resolves all paths relative to its own parent directory, so the project can be placed anywhere.
+The `bin/apt-bootstrap` script resolves all paths relative to its own parent directory, so the project can be placed anywhere.
 
 ---
 
@@ -76,7 +76,7 @@ log_path=logs/0100-hostname.20240115-103000.log
 | `success` | Step completed with exit code 0                  |
 | `failed`  | Step completed with a non-zero exit code         |
 
-State files are written and maintained automatically by the runner. You should not need to edit them by hand. Use `bootstrap state clear` if you need to reset a step.
+State files are written and maintained automatically by the runner. You should not need to edit them by hand. Use `apt-bootstrap state clear` if you need to reset a step.
 
 ---
 
@@ -104,13 +104,13 @@ Each step run produces a timestamped log file:
 logs/NNNN-name.YYYYMMDD-HHMMSS.log
 ```
 
-Multiple runs of the same step produce separate log files. The state file's `log_path` field points to the most recent run. Older logs are retained until you remove them manually (or use `bootstrap delete --purge`).
+Multiple runs of the same step produce separate log files. The state file's `log_path` field points to the most recent run. Older logs are retained until you remove them manually (or use `apt-bootstrap delete --purge`).
 
 ---
 
 ## Rename and move behaviour
 
-### `bootstrap rename NNNN new-name`
+### `apt-bootstrap rename NNNN new-name`
 
 Changes the descriptive name portion of the filename, keeping the number the same.
 
@@ -121,7 +121,7 @@ Changes the descriptive name portion of the filename, keeping the number the sam
 - A `# Renamed from: ...` comment is appended to each migrated log file.
 - The recorded checksum remains valid (contents did not change).
 
-### `bootstrap move OLD_NNNN NEW_NNNN`
+### `apt-bootstrap move OLD_NNNN NEW_NNNN`
 
 Changes the numeric prefix, keeping the descriptive name the same.
 
@@ -136,7 +136,7 @@ Changes the numeric prefix, keeping the descriptive name the same.
 
 ## Commands
 
-### `bootstrap list`
+### `apt-bootstrap list`
 
 Shows all steps in execution order with their current status and any change indicators.
 
@@ -148,39 +148,39 @@ STEP    FILENAME                        STATUS      NOTE
 0300    0300-hostname.sh                pending
 ```
 
-### `bootstrap create NNNN name`
+### `apt-bootstrap create NNNN name`
 
 Creates a new step file from the template. Validates that the number is unique. Fills in the `Step` and `Name` header fields automatically.
 
 ```
-bootstrap create 0300 hostname
+apt-bootstrap create 0300 hostname
 ```
 
-### `bootstrap rename NNNN new-name`
+### `apt-bootstrap rename NNNN new-name`
 
 ```
-bootstrap rename 0300 set-hostname
+apt-bootstrap rename 0300 set-hostname
 ```
 
-### `bootstrap move OLD_NNNN NEW_NNNN`
+### `apt-bootstrap move OLD_NNNN NEW_NNNN`
 
 ```
-bootstrap move 0300 0350
+apt-bootstrap move 0300 0350
 ```
 
-### `bootstrap delete NNNN [--force] [--purge]`
+### `apt-bootstrap delete NNNN [--force] [--purge]`
 
 Removes the step file. Prompts for confirmation unless `--force` is given.
 
 By default, state and log files are **preserved** so you retain a history of what ran. Use `--purge` to also remove state and logs.
 
 ```
-bootstrap delete 0300           # prompt, preserve state/logs
-bootstrap delete 0300 --force   # no prompt, preserve state/logs
-bootstrap delete 0300 --purge --force   # no prompt, remove everything
+apt-bootstrap delete 0300           # prompt, preserve state/logs
+apt-bootstrap delete 0300 --force   # no prompt, preserve state/logs
+apt-bootstrap delete 0300 --purge --force   # no prompt, remove everything
 ```
 
-### `bootstrap run SELECTOR [--force] [--list-only]`
+### `apt-bootstrap run SELECTOR [--force] [--list-only]`
 
 #### Selectors
 
@@ -207,23 +207,23 @@ bootstrap delete 0300 --purge --force   # no prompt, remove everything
 
 `--changed` is for incremental updates: run only what has changed since last success. It does not rerun failed steps (use `--failed` for that).
 
-### `bootstrap state show [NNNN]`
+### `apt-bootstrap state show [NNNN]`
 
 Print state details for all steps, or a specific step.
 
-### `bootstrap state clear NNNN`
+### `apt-bootstrap state clear NNNN`
 
-Remove the state file for a step. The step will be treated as never-run on the next `bootstrap run`.
+Remove the state file for a step. The step will be treated as never-run on the next `apt-bootstrap run`.
 
-### `bootstrap state clear-range NNNN NNNN`
+### `apt-bootstrap state clear-range NNNN NNNN`
 
 Clear state for all steps in the inclusive numeric range.
 
-### `bootstrap state clear-all`
+### `apt-bootstrap state clear-all`
 
 Remove all state files.
 
-### `bootstrap doctor`
+### `apt-bootstrap doctor`
 
 Check for common problems:
 
@@ -283,55 +283,55 @@ log "Done."
 ## Installation
 
 ```bash
-chmod +x bootstrap/bin/bootstrap
+chmod +x apt-bootstrap/bin/apt-bootstrap
 # Optionally symlink into your PATH:
-ln -s "$(pwd)/bootstrap/bin/bootstrap" /usr/local/bin/bootstrap
+ln -s "$(pwd)/apt-bootstrap/bin/apt-bootstrap" /usr/local/bin/apt-bootstrap
 ```
 
 ---
 
 ## Local test plan
 
-The following sequence verifies all major features. Run from inside the `bootstrap/` directory.
+The following sequence verifies all major features. Run from inside the `apt-bootstrap/` directory.
 
 ### 1. Create
 
 ```bash
-bin/bootstrap create 0300 test-step
+bin/apt-bootstrap create 0300 test-step
 # Expected: steps/0300-test-step.sh created from template.
 ```
 
 ### 2. List
 
 ```bash
-bin/bootstrap list
+bin/apt-bootstrap list
 # Expected: 0100, 0200, 0300 shown; all pending or with existing state.
 ```
 
 ### 3. Run first
 
 ```bash
-bin/bootstrap run --first
+bin/apt-bootstrap run --first
 # Expected: step 0100 (example-hello) runs and prints system info.
-bin/bootstrap list
+bin/apt-bootstrap list
 # Expected: 0100 shows status=success.
 ```
 
 ### 4. Run last
 
 ```bash
-bin/bootstrap run --last
+bin/apt-bootstrap run --last
 # Expected: step 0300 (test-step) runs (or fails since it has a TODO).
 # Edit steps/0300-test-step.sh to add a real body first:
 #   echo "hello from test-step"
 # Then:
-bin/bootstrap run --last
+bin/apt-bootstrap run --last
 ```
 
 ### 5. Run a range
 
 ```bash
-bin/bootstrap run --range 0100:0200
+bin/apt-bootstrap run --range 0100:0200
 # Expected: both 0100 and 0200 run in order.
 # On second run: both are skipped (success, unchanged).
 ```
@@ -339,7 +339,7 @@ bin/bootstrap run --range 0100:0200
 ### 6. Run all (verify skip behaviour)
 
 ```bash
-bin/bootstrap run --all
+bin/apt-bootstrap run --all
 # Expected: 0100 and 0200 are skipped (already succeeded).
 # 0300 runs if it has not run yet.
 ```
@@ -350,17 +350,17 @@ bin/bootstrap run --all
 # Modify a step file:
 echo "# changed" >> steps/0100-example-hello.sh
 
-bin/bootstrap list
+bin/apt-bootstrap list
 # Expected: 0100 shows [CHANGED].
 
-bin/bootstrap run --all
+bin/apt-bootstrap run --all
 # Expected: 0100 is SKIPPED with a warning (changed).
 # Other steps run normally.
 
-bin/bootstrap run --changed
+bin/apt-bootstrap run --changed
 # Expected: 0100 runs (changed since last success).
 
-bin/bootstrap run --all --list-only
+bin/apt-bootstrap run --all --list-only
 # Expected: shows [WOULD RUN] / [SKIP] / [SKIP/WARN] without executing.
 ```
 
@@ -368,83 +368,83 @@ bin/bootstrap run --all --list-only
 
 ```bash
 # Create a step that fails:
-bin/bootstrap create 0150 always-fail
+bin/apt-bootstrap create 0150 always-fail
 echo 'exit 1' >> steps/0150-always-fail.sh
 
-bin/bootstrap run --step 0150
+bin/apt-bootstrap run --step 0150
 # Expected: step fails; status=failed recorded.
 
-bin/bootstrap run --all
+bin/apt-bootstrap run --all
 # Expected: stops with error at step 0150.
 
-bin/bootstrap run --failed
+bin/apt-bootstrap run --failed
 # Expected: only step 0150 is retried.
 
-bin/bootstrap run --step 0150 --force
+bin/apt-bootstrap run --step 0150 --force
 # Expected: step 0150 is retried regardless of failed state.
 ```
 
 ### 9. Rename
 
 ```bash
-bin/bootstrap rename 0300 renamed-step
+bin/apt-bootstrap rename 0300 renamed-step
 # Expected: steps/0300-test-step.sh -> steps/0300-renamed-step.sh
 #           state/0300-test-step.state -> state/0300-renamed-step.state (if exists)
 
-bin/bootstrap list
+bin/apt-bootstrap list
 # Expected: 0300 shows new name.
 ```
 
 ### 10. Move
 
 ```bash
-bin/bootstrap move 0300 0350
+bin/apt-bootstrap move 0300 0350
 # Expected: steps/0300-renamed-step.sh -> steps/0350-renamed-step.sh
 #           state migrated; logs migrated.
 
-bin/bootstrap list
+bin/apt-bootstrap list
 # Expected: step appears at 0350.
 ```
 
 ### 11. Delete
 
 ```bash
-bin/bootstrap delete 0150
+bin/apt-bootstrap delete 0150
 # Expected: prompts for confirmation; deletes step file; state/logs preserved.
 
-bin/bootstrap delete 0350 --force --purge
+bin/apt-bootstrap delete 0350 --force --purge
 # Expected: no prompt; deletes step file, state file, and log files.
 
-bin/bootstrap list
+bin/apt-bootstrap list
 # Expected: 0150 and 0350 no longer appear.
 ```
 
 ### 12. State management
 
 ```bash
-bin/bootstrap state show
+bin/apt-bootstrap state show
 # Expected: details for all steps.
 
-bin/bootstrap state show 0100
+bin/apt-bootstrap state show 0100
 # Expected: details for step 0100 including checksum match status.
 
-bin/bootstrap state clear 0100
+bin/apt-bootstrap state clear 0100
 # Expected: state file removed; 0100 is pending again.
 
-bin/bootstrap run --all
+bin/apt-bootstrap run --all
 # Expected: 0100 runs again.
 
-bin/bootstrap state clear-range 0100 0200
+bin/apt-bootstrap state clear-range 0100 0200
 # Expected: state cleared for both 0100 and 0200.
 
-bin/bootstrap state clear-all
+bin/apt-bootstrap state clear-all
 # Expected: all state files removed.
 ```
 
 ### 13. Doctor
 
 ```bash
-bin/bootstrap doctor
+bin/apt-bootstrap doctor
 # Expected: reports any failed, running, or changed steps.
 # With clean state and no issues: "All clear."
 ```
