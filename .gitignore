@@ -1,0 +1,6 @@
+# Runtime data -- not committed
+state/*.state
+logs/*.log
+
+# macOS
+.DS_Store
