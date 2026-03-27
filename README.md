@@ -290,6 +290,33 @@ ln -s "$(pwd)/apt-bootstrap/bin/apt-bootstrap" /usr/local/bin/apt-bootstrap
 
 ---
 
+## Separating the tool from your scripts
+
+By default, `apt-bootstrap` looks for `steps/`, `state/`, and `logs/` inside its own repository. If you want to keep your provisioning scripts in a separate repository (recommended for anything non-public), set `APT_BOOTSTRAP_ROOT` to that repository's root:
+
+```bash
+export APT_BOOTSTRAP_ROOT=/opt/my-scripts
+apt-bootstrap list
+apt-bootstrap run --all
+```
+
+With this layout:
+
+```
+/opt/apt-bootstrap/          # tool repository (this repo)
+  bin/apt-bootstrap          # the runner
+  templates/step.sh          # template (always read from tool location)
+
+/opt/my-scripts/             # your private scripts repository
+  steps/                     # your step files
+  state/                     # runtime state (gitignore this)
+  logs/                      # runtime logs (gitignore this)
+```
+
+`apt-bootstrap create` will create new steps inside `APT_BOOTSTRAP_ROOT/steps/` and still use the template from the tool. Set `APT_BOOTSTRAP_ROOT` permanently in the server's shell profile or a deployment wrapper script.
+
+---
+
 ## Local test plan
 
 The following sequence verifies all major features. Run from inside the `apt-bootstrap/` directory.

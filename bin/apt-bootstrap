@@ -7,16 +7,29 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Project layout (resolved relative to this script's parent directory)
+# Project layout
+# ---------------------------------------------------------------------------
+#
+# TOOL_ROOT   -- always the directory containing this script's bin/ folder.
+#                Templates live here; this never changes.
+#
+# PROJECT_ROOT -- the working root for steps/, state/, and logs/.
+#                 Defaults to TOOL_ROOT. Override with APT_BOOTSTRAP_ROOT
+#                 to operate on a separate scripts repository while keeping
+#                 the tool itself in its own location.
+#
+#                 Example:
+#                   APT_BOOTSTRAP_ROOT=/opt/core-01 apt-bootstrap run --all
 # ---------------------------------------------------------------------------
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "${SELF_DIR}")"
+TOOL_ROOT="$(dirname "${SELF_DIR}")"
+PROJECT_ROOT="${APT_BOOTSTRAP_ROOT:-${TOOL_ROOT}}"
 
 STEPS_DIR="${PROJECT_ROOT}/steps"
 STATE_DIR="${PROJECT_ROOT}/state"
 LOGS_DIR="${PROJECT_ROOT}/logs"
-TEMPLATES_DIR="${PROJECT_ROOT}/templates"
+TEMPLATES_DIR="${TOOL_ROOT}/templates"
 
 STEP_TEMPLATE="${TEMPLATES_DIR}/step.sh"
 
