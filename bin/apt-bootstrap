@@ -759,7 +759,7 @@ cmd_run() {
         validate_range_arg "${selector_arg}"
         local range_lo="${selector_arg%%:*}"
         local range_hi="${selector_arg##*:}"
-        [[ "${range_lo}" -le "${range_hi}" ]] \
+        (( 10#${range_lo} <= 10#${range_hi} )) \
             || die "Range start (${range_lo}) must be <= range end (${range_hi})."
     fi
 
@@ -792,7 +792,7 @@ cmd_run() {
             while IFS= read -r step_path; do
                 local n
                 n="$(step_number "${step_path}")"
-                if [[ "${n}" -ge "${lo}" && "${n}" -le "${hi}" ]]; then
+                if (( 10#${n} >= 10#${lo} && 10#${n} <= 10#${hi} )); then
                     candidates+=("${step_path}")
                 fi
             done < <(find_steps)
@@ -1021,14 +1021,14 @@ cmd_state() {
             local lo="$1" hi="$2"
             validate_number "${lo}"
             validate_number "${hi}"
-            [[ "${lo}" -le "${hi}" ]] || die "Range start must be <= range end."
+            (( 10#${lo} <= 10#${hi} )) || die "Range start must be <= range end."
             ensure_dirs
             local cleared=0
             local step_path
             while IFS= read -r step_path; do
                 local n
                 n="$(step_number "${step_path}")"
-                if [[ "${n}" -ge "${lo}" && "${n}" -le "${hi}" ]]; then
+                if (( 10#${n} >= 10#${lo} && 10#${n} <= 10#${hi} )); then
                     local state_file
                     state_file="$(state_file_for "${step_path}")"
                     if [[ -f "${state_file}" ]]; then
