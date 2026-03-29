@@ -20,6 +20,19 @@ set -euo pipefail
 #
 #                 Example:
 #                   APT_BOOTSTRAP_ROOT=/opt/core-01 apt-bootstrap run --all
+#
+# APT_BOOTSTRAP_SECRETS -- optional path to a shell script that exports
+#                 bootstrap secrets as BS_-prefixed environment variables.
+#                 If set, every step is executed inside a subshell that
+#                 sources this file first. The subshell exits after the step,
+#                 clearing all sourced variables from memory automatically.
+#
+#                 The file must be readable by root. Keep it in RAM-backed
+#                 storage (/dev/shm) and shred it after bootstrap completes.
+#
+#                 Example:
+#                   APT_BOOTSTRAP_SECRETS=/dev/shm/bs-secrets.sh \
+#                     APT_BOOTSTRAP_ROOT=/opt/services-01 apt-bootstrap run --all
 # ---------------------------------------------------------------------------
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -364,9 +377,20 @@ execute_step() {
 
     # Execute the step. Temporarily suspend errexit and pipefail so we can
     # capture the exit code from the left side of the pipe.
+    #
+    # If APT_BOOTSTRAP_SECRETS is set and points to a readable file, each step
+    # runs inside a subshell that sources that file first. This makes all
+    # BS_-prefixed bootstrap secrets available to the step. The subshell exits
+    # after the step completes, automatically clearing all sourced variables
+    # from memory. The secrets file itself is never modified.
     local step_exit_code=0
     set +eo pipefail
-    bash "${step_path}" 2>&1 | tee -a "${log_file}"
+    if [[ -n "${APT_BOOTSTRAP_SECRETS:-}" && -f "${APT_BOOTSTRAP_SECRETS}" ]]; then
+        bash -c '. "$1"; . "$2"' -- "${APT_BOOTSTRAP_SECRETS}" "${step_path}" \
+            2>&1 | tee -a "${log_file}"
+    else
+        bash "${step_path}" 2>&1 | tee -a "${log_file}"
+    fi
     step_exit_code="${PIPESTATUS[0]}"
     set -eo pipefail
 
@@ -1196,6 +1220,21 @@ COMMANDS
 
   help
       Show this message.
+
+ENVIRONMENT
+
+  APT_BOOTSTRAP_ROOT
+      Working root for steps/, state/, and logs/ directories.
+      Defaults to the directory containing the apt-bootstrap script.
+      Example: APT_BOOTSTRAP_ROOT=/opt/services-01 apt-bootstrap run --all
+
+  APT_BOOTSTRAP_SECRETS
+      Path to a shell script that exports bootstrap secrets as BS_-prefixed
+      environment variables. If set, every step is executed inside a subshell
+      that sources this file first. The subshell exits after each step,
+      automatically clearing all sourced variables from memory.
+      Keep this file in /dev/shm (RAM-backed) and shred it after bootstrap.
+      Example: APT_BOOTSTRAP_SECRETS=/dev/shm/bs-secrets.sh apt-bootstrap run --all
 
 EOF
 }
