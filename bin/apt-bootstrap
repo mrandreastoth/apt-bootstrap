@@ -28,10 +28,14 @@ set -euo pipefail
 #                 clearing all sourced variables from memory automatically.
 #
 #                 The file must be readable by root. Keep it in RAM-backed
-#                 storage (/dev/shm) and shred it after bootstrap completes.
+#                 storage and shred it after bootstrap completes.
+#                 Interactive: /run/user/$(id -u)/
+#                 Non-interactive: mktemp -d /dev/shm/bs.XXXXXX
 #
 #                 Example:
-#                   APT_BOOTSTRAP_SECRETS=/dev/shm/bs-secrets.sh \
+#                   SECRETS_DIR=$(mktemp -d /dev/shm/bs.XXXXXX)
+#                   # ... write secrets to $SECRETS_DIR/secrets.sh ...
+#                   APT_BOOTSTRAP_SECRETS=$SECRETS_DIR/secrets.sh \
 #                     APT_BOOTSTRAP_ROOT=/opt/services-01 apt-bootstrap run --all
 # ---------------------------------------------------------------------------
 
@@ -1233,8 +1237,9 @@ ENVIRONMENT
       environment variables. If set, every step is executed inside a subshell
       that sources this file first. The subshell exits after each step,
       automatically clearing all sourced variables from memory.
-      Keep this file in /dev/shm (RAM-backed) and shred it after bootstrap.
-      Example: APT_BOOTSTRAP_SECRETS=/dev/shm/bs-secrets.sh apt-bootstrap run --all
+      Keep this file in RAM-backed storage and shred it after bootstrap.
+      Interactive: /run/user/$(id -u)/  Non-interactive: mktemp -d /dev/shm/bs.XXXXXX
+      Example: APT_BOOTSTRAP_SECRETS=/dev/shm/bs.XXXXXX/secrets.sh apt-bootstrap run --all
 
 EOF
 }
