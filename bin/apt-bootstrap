@@ -21,21 +21,31 @@ set -euo pipefail
 #                 Example:
 #                   APT_BOOTSTRAP_ROOT=/opt/core-01 apt-bootstrap run --all
 #
-# APT_BOOTSTRAP_SECRETS -- optional path to a shell script that exports
+# APT_BOOTSTRAP_SECRETS -- optional path to a directory or file containing
 #                 bootstrap secrets as BS_-prefixed environment variables.
-#                 If set, every step is executed inside a subshell that
-#                 sources this file first. The subshell exits after the step,
-#                 clearing all sourced variables from memory automatically.
 #
-#                 The file must be readable by root. Keep it in RAM-backed
-#                 storage and shred it after bootstrap completes.
-#                 Interactive: /run/user/$(id -u)/
-#                 Non-interactive: mktemp -d /dev/shm/bs.XXXXXX
+#                 Directory mode (preferred):
+#                   Points to a directory containing system.sh and/or user.sh.
+#                   Both are sourced (system first, then user) in a subshell
+#                   before each step. This separates system secrets (DB
+#                   passwords, API tokens) from user secrets (personal
+#                   passwords, identity fields).
 #
-#                 Example:
-#                   SECRETS_DIR=$(mktemp -d /dev/shm/bs.XXXXXX)
-#                   # ... write secrets to $SECRETS_DIR/secrets.sh ...
-#                   APT_BOOTSTRAP_SECRETS=$SECRETS_DIR/secrets.sh \
+#                 File mode (legacy):
+#                   Points to a single .sh file. Sourced in a subshell before
+#                   each step. Backward compatible with older deploy.sh scripts.
+#
+#                 The subshell exits after each step, automatically clearing
+#                 all sourced variables from memory.
+#
+#                 Keep secrets in RAM-backed storage and shred after bootstrap.
+#                 Non-interactive: mktemp -d /dev/shm/bs-secrets.XXXXXX
+#
+#                 Example (directory mode):
+#                   DIR=$(mktemp -d /dev/shm/bs-secrets.XXXXXX)
+#                   # ... write system secrets to $DIR/system.sh ...
+#                   # ... write user secrets to $DIR/user.sh ...
+#                   APT_BOOTSTRAP_SECRETS=$DIR \
 #                     APT_BOOTSTRAP_ROOT=/opt/services-01 apt-bootstrap run --all
 # ---------------------------------------------------------------------------
 
@@ -382,14 +392,26 @@ execute_step() {
     # Execute the step. Temporarily suspend errexit and pipefail so we can
     # capture the exit code from the left side of the pipe.
     #
-    # If APT_BOOTSTRAP_SECRETS is set and points to a readable file, each step
-    # runs inside a subshell that sources that file first. This makes all
-    # BS_-prefixed bootstrap secrets available to the step. The subshell exits
-    # after the step completes, automatically clearing all sourced variables
-    # from memory. The secrets file itself is never modified.
+    # APT_BOOTSTRAP_SECRETS can be:
+    #   - A directory: sources system.sh then user.sh (if they exist) before
+    #     the step. This separates system secrets from user secrets.
+    #   - A file (legacy): sources that single file before the step.
+    #   - Unset/empty: runs the step without any secrets.
+    #
+    # Each step runs inside a subshell. The subshell exits after the step
+    # completes, automatically clearing all sourced variables from memory.
     local step_exit_code=0
     set +eo pipefail
-    if [[ -n "${APT_BOOTSTRAP_SECRETS:-}" && -f "${APT_BOOTSTRAP_SECRETS}" ]]; then
+    if [[ -n "${APT_BOOTSTRAP_SECRETS:-}" && -d "${APT_BOOTSTRAP_SECRETS}" ]]; then
+        # Directory mode: source system.sh then user.sh before the step.
+        bash -c '
+            [[ -f "$1/system.sh" ]] && . "$1/system.sh"
+            [[ -f "$1/user.sh" ]]   && . "$1/user.sh"
+            . "$2"
+        ' -- "${APT_BOOTSTRAP_SECRETS}" "${step_path}" \
+            2>&1 | tee -a "${log_file}"
+    elif [[ -n "${APT_BOOTSTRAP_SECRETS:-}" && -f "${APT_BOOTSTRAP_SECRETS}" ]]; then
+        # Legacy single-file mode.
         bash -c '. "$1"; . "$2"' -- "${APT_BOOTSTRAP_SECRETS}" "${step_path}" \
             2>&1 | tee -a "${log_file}"
     else
@@ -1233,13 +1255,17 @@ ENVIRONMENT
       Example: APT_BOOTSTRAP_ROOT=/opt/services-01 apt-bootstrap run --all
 
   APT_BOOTSTRAP_SECRETS
-      Path to a shell script that exports bootstrap secrets as BS_-prefixed
-      environment variables. If set, every step is executed inside a subshell
-      that sources this file first. The subshell exits after each step,
-      automatically clearing all sourced variables from memory.
-      Keep this file in RAM-backed storage and shred it after bootstrap.
-      Interactive: /run/user/$(id -u)/  Non-interactive: mktemp -d /dev/shm/bs.XXXXXX
-      Example: APT_BOOTSTRAP_SECRETS=/dev/shm/bs.XXXXXX/secrets.sh apt-bootstrap run --all
+      Path to a directory or file containing bootstrap secrets (BS_-prefixed
+      environment variables). Each step runs in a subshell that sources the
+      secrets before execution; variables are cleared automatically on exit.
+
+      Directory mode (preferred): contains system.sh and/or user.sh. Both are
+      sourced (system first, then user) to separate system and user secrets.
+
+      File mode (legacy): a single .sh file sourced before each step.
+
+      Keep secrets in RAM-backed storage and shred after bootstrap.
+      Example: APT_BOOTSTRAP_SECRETS=/dev/shm/bs-secrets.XXXXXX apt-bootstrap run --all
 
 EOF
 }
