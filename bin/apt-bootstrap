@@ -317,7 +317,7 @@ step_eligibility() {
 
     # Normal (no --force) eligibility rules per status.
     case "${recorded_status}" in
-        success)
+        success|reboot-required)
             if [[ "${current_checksum}" == "${recorded_checksum}" ]]; then
                 # Unchanged: always skip regardless of selector.
                 printf 'skip-success'
@@ -400,22 +400,36 @@ execute_step() {
     #
     # Each step runs inside a subshell. The subshell exits after the step
     # completes, automatically clearing all sourced variables from memory.
+    # Source order: manifest (non-secret identity) → system secrets → user secrets → step.
+    # Manifest lives alongside steps at ${PROJECT_ROOT}/manifest.sh.
+    # Later files win on variable name conflicts.
+    local manifest_path="${PROJECT_ROOT}/manifest.sh"
+
     local step_exit_code=0
     set +eo pipefail
     if [[ -n "${APT_BOOTSTRAP_SECRETS:-}" && -d "${APT_BOOTSTRAP_SECRETS}" ]]; then
-        # Directory mode: source system.sh then user.sh before the step.
+        # Directory mode: source manifest, then system.sh, then user.sh before the step.
         bash -c '
+            [[ -f "$3" ]] && . "$3"
             [[ -f "$1/system.sh" ]] && . "$1/system.sh"
             [[ -f "$1/user.sh" ]]   && . "$1/user.sh"
             . "$2"
-        ' -- "${APT_BOOTSTRAP_SECRETS}" "${step_path}" \
+        ' -- "${APT_BOOTSTRAP_SECRETS}" "${step_path}" "${manifest_path}" \
             2>&1 | tee -a "${log_file}"
     elif [[ -n "${APT_BOOTSTRAP_SECRETS:-}" && -f "${APT_BOOTSTRAP_SECRETS}" ]]; then
         # Legacy single-file mode.
-        bash -c '. "$1"; . "$2"' -- "${APT_BOOTSTRAP_SECRETS}" "${step_path}" \
+        bash -c '
+            [[ -f "$3" ]] && . "$3"
+            . "$1"; . "$2"
+        ' -- "${APT_BOOTSTRAP_SECRETS}" "${step_path}" "${manifest_path}" \
             2>&1 | tee -a "${log_file}"
     else
-        bash "${step_path}" 2>&1 | tee -a "${log_file}"
+        # No secrets — source manifest only.
+        bash -c '
+            [[ -f "$2" ]] && . "$2"
+            . "$1"
+        ' -- "${step_path}" "${manifest_path}" \
+            2>&1 | tee -a "${log_file}"
     fi
     step_exit_code="${PIPESTATUS[0]}"
     set -eo pipefail
@@ -435,6 +449,17 @@ execute_step() {
             "${number}" "${filename}" "${current_checksum}" \
             "success" "${started_at}" "${completed_at}" "${step_exit_code}" "${log_file}"
         ok "Step ${number} (${filename}) succeeded."
+    elif [[ "${step_exit_code}" -eq 3 ]]; then
+        write_state "${state_file}" \
+            "${number}" "${filename}" "${current_checksum}" \
+            "reboot-required" "${started_at}" "${completed_at}" "${step_exit_code}" "${log_file}"
+        printf '\n'
+        printf '%b══════════════════════════════════════════════════%b\n' "${C_YELLOW}" "${C_RESET}"
+        printf '%b  REBOOT REQUIRED%b\n' "${C_YELLOW}" "${C_RESET}"
+        printf '%b══════════════════════════════════════════════════%b\n' "${C_YELLOW}" "${C_RESET}"
+        printf '\n  Step %s (%s) requires a reboot before continuing.\n' "${number}" "${filename}"
+        printf '  After reboot, re-run the bootstrap to resume.\n\n'
+        exit 3
     else
         write_state "${state_file}" \
             "${number}" "${filename}" "${current_checksum}" \
@@ -444,6 +469,52 @@ execute_step() {
         printf '       Log: %s\n' "${log_file}" >&2
         exit 1
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Run-notes summary (reads bs_note sidecar file from steps)
+# ---------------------------------------------------------------------------
+
+# Print structured notes emitted by steps via bs_note().
+# Notes are stored in ${APT_BOOTSTRAP_SECRETS}/notes.txt as NNNN|TYPE|message.
+# Called at the end of cmd_run() to surface deferred items, user actions, and info.
+print_run_notes() {
+    local notes_file="${APT_BOOTSTRAP_SECRETS:-}/notes.txt"
+    [[ -f "${notes_file}" ]] || return 0
+
+    local has_deferred has_action has_info
+    has_deferred="$(grep -c '|DEFERRED|' "${notes_file}" 2>/dev/null || true)"
+    has_action="$(grep -c '|ACTION|' "${notes_file}" 2>/dev/null || true)"
+    has_info="$(grep -c '|INFO|' "${notes_file}" 2>/dev/null || true)"
+
+    # Nothing to show.
+    (( has_deferred + has_action + has_info > 0 )) || return 0
+
+    printf '\n'
+    hr
+
+    if (( has_deferred > 0 )); then
+        printf '\n  %b── DEFERRED ────────────────────────────────────%b\n' "${C_YELLOW}" "${C_RESET}"
+        grep '|DEFERRED|' "${notes_file}" | while IFS='|' read -r step type msg; do
+            printf '  %b[%s]%b %s\n' "${C_YELLOW}" "${step}" "${C_RESET}" "${msg}"
+        done
+    fi
+
+    if (( has_action > 0 )); then
+        printf '\n  %b── USER ACTIONS ────────────────────────────────%b\n' "${C_BOLD}" "${C_RESET}"
+        grep '|ACTION|' "${notes_file}" | while IFS='|' read -r step type msg; do
+            printf '  %b[%s]%b %s\n' "${C_BOLD}" "${step}" "${C_RESET}" "${msg}"
+        done
+    fi
+
+    if (( has_info > 0 )); then
+        printf '\n  %b── INFO ────────────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
+        grep '|INFO|' "${notes_file}" | while IFS='|' read -r step type msg; do
+            printf '  %b[%s]%b %s\n' "${C_DIM}" "${step}" "${C_RESET}" "${msg}"
+        done
+    fi
+
+    printf '\n'
 }
 
 # ---------------------------------------------------------------------------
@@ -941,10 +1012,16 @@ cmd_run() {
     else
         info "No steps were executed."
     fi
+    if [[ ${#skipped_steps[@]} -gt 0 ]]; then
+        info "${#skipped_steps[@]} step(s) skipped."
+    fi
     if [[ ${#changed_steps[@]} -gt 0 ]]; then
         warn "${#changed_steps[@]} changed step(s) were skipped: ${changed_steps[*]}"
         warn "Run 'apt-bootstrap run --changed' or 'apt-bootstrap run --force' to rerun them."
     fi
+
+    # Print structured notes from steps (bs_note sidecar file).
+    print_run_notes
 }
 
 # ---------------------------------------------------------------------------
